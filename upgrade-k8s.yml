@@ -1,0 +1,59 @@
+- name: upgrade k8s master
+  hosts: k8s-master-3-new
+  become: true
+  vars:
+    install_kubeadm_version: 1.26.0-00
+    upgrade_kubeadm_version: v1.26.0
+    install_kubelet_version: 1.26.0-00
+    install_kubectl_version: 1.26.0-00
+  tasks:
+    - name: Update all packages to their latest version
+      ansible.builtin.apt:
+        name: "*"
+        state: latest
+    - name: Unhold kubeadm
+      ansible.builtin.dpkg_selections:
+        name: kubeadm
+        selection: install
+    - name: Install desired version of kubeadm
+      apt: 
+        name: "kubeadm={{ install_kubeadm_version }}"
+    - name: Hold kubeadm
+      ansible.builtin.dpkg_selections:
+        name: kubeadm
+        selection: hold
+    - name: Drain master node
+      command: "kubectl drain {{ inventory_hostname }} --ignore-daemonsets --delete-emptydir-data"
+    - name: Unhold kubelet
+      ansible.builtin.dpkg_selections:
+        name: kubelet
+        selection: install
+    - name: Install desired version of kubelet
+      apt:
+        name: "kubelet={{ install_kubelet_version }}"
+    - name: Unhold kubectl
+      ansible.builtin.dpkg_selections:
+        name: kubectl
+        selection: install
+    - name: Install desired version of kubectl
+      apt:
+        name: "kubectl={{ install_kubectl_version }}"
+    - name: Hold kubelet
+      ansible.builtin.dpkg_selections:
+        name: kubelet
+        selection: hold
+    - name: Hold kubectl
+      ansible.builtin.dpkg_selections:
+        name: kubectl
+        selection: hold
+    - name: Daemon reload
+      ansible.builtin.systemd:
+        daemon_reload: true
+    - name: Restart kubelet
+      service:
+        name: kubelet
+        state: restarted 
+    - name: Uncordon master node
+      command: "kubectl uncordon {{ inventory_hostname }}"
+
+

@@ -1,16 +1,12 @@
-- name: upgrade k8s master
-  hosts: k8s-master-3-new
+- name: Upgrade the first master k8s node
+  hosts: oprekFirstMaster
   become: true
-  vars:
-    install_kubeadm_version: 1.26.0-00
-    upgrade_kubeadm_version: v1.26.0
-    install_kubelet_version: 1.26.0-00
-    install_kubectl_version: 1.26.0-00
   tasks:
-    - name: Update all packages to their latest version
-      ansible.builtin.apt:
-        name: "*"
-        state: latest
+    - name: Import variable
+      include_vars: vars.yml # check vars.yml.example
+    - name: Run apt-get update
+      apt:
+        update_cache: true
     - name: Unhold kubeadm
       ansible.builtin.dpkg_selections:
         name: kubeadm
@@ -22,6 +18,140 @@
       ansible.builtin.dpkg_selections:
         name: kubeadm
         selection: hold
+    - name: Upgrade kubeadm
+      command: "kubeadm upgrade apply {{ upgrade_kubeadm_version }} -y"
+    - name: Drain master node
+      command: "kubectl drain {{ inventory_hostname }} --ignore-daemonsets --delete-emptydir-data"
+    - name: Unhold kubelet
+      ansible.builtin.dpkg_selections:
+        name: kubelet
+        selection: install
+    - name: Unhold kubectl
+      ansible.builtin.dpkg_selections:
+        name: kubectl
+        selection: install
+    - name: Install desired version of kubelet
+      apt:
+        name: "kubelet={{ install_kubelet_version }}"
+    - name: Install desired version of kubectl
+      apt:
+        name: "kubectl={{ install_kubectl_version }}"
+    - name: Hold kubelet
+      ansible.builtin.dpkg_selections:
+        name: kubelet
+        selection: hold
+    - name: Hold kubectl
+      ansible.builtin.dpkg_selections:
+        name: kubectl
+        selection: hold
+    - name: Daemon reload
+      ansible.builtin.systemd:
+        daemon_reload: true
+    - name: Restart kubelet
+      service:
+        name: kubelet
+        state: restarted 
+    - name: Uncordon master node
+      command: "kubectl uncordon {{ inventory_hostname }}"
+
+- name: Upgrade other k8s masters
+  hosts: oprekOtherMasters
+  become: true
+  tasks:
+    - name: Import variable
+      include_vars: vars.yml
+    - name: Create .kube directory
+      file:
+        path: /root/.kube
+        state: directory
+    - name: Copy kubeconfig
+      copy: 
+        src: config
+        dest: /root/.kube/config
+    - name: Run apt-get update
+      apt:
+        update_cache: true
+    - name: Unhold kubeadm
+      ansible.builtin.dpkg_selections:
+        name: kubeadm
+        selection: install
+    - name: Install desired version of kubeadm
+      apt: 
+        name: "kubeadm={{ install_kubeadm_version }}"
+    - name: Hold kubeadm
+      ansible.builtin.dpkg_selections:
+        name: kubeadm
+        selection: hold
+    - name: Upgrade kubeadm
+      command: "kubeadm upgrade node"
+    - name: Drain master node
+      command: "kubectl drain {{ inventory_hostname }} --ignore-daemonsets --delete-emptydir-data"
+    - name: Unhold kubelet
+      ansible.builtin.dpkg_selections:
+        name: kubelet
+        selection: install
+    - name: Unhold kubectl
+      ansible.builtin.dpkg_selections:
+        name: kubectl
+        selection: install
+    - name: Install desired version of kubelet
+      apt:
+        name: "kubelet={{ install_kubelet_version }}"
+    - name: Install desired version of kubectl
+      apt:
+        name: "kubectl={{ install_kubectl_version }}"
+    - name: Hold kubelet
+      ansible.builtin.dpkg_selections:
+        name: kubelet
+        selection: hold
+    - name: Hold kubectl
+      ansible.builtin.dpkg_selections:
+        name: kubectl
+        selection: hold
+    - name: Daemon reload
+      ansible.builtin.systemd:
+        daemon_reload: true
+    - name: Restart kubelet
+      service:
+        name: kubelet
+        state: restarted 
+    - name: Uncordon master node
+      command: "kubectl uncordon {{ inventory_hostname }}"
+    - name: Delete .kube directory
+      file:
+        path: /root/.kube/
+        state: absent
+
+- name: upgrade k8s worker node
+  hosts: oprekWorkers
+  become: true
+  tasks:
+    - name: Import variable
+      include_vars: vars.yml
+    - name: Create .kube directory
+      file:
+        path: /root/.kube
+        state: directory
+    - name: Copy kubeconfig
+      copy: 
+        src: config
+        dest: /root/.kube/config
+    - name: Run apt-get update
+      apt:
+        update_cache: true
+    - name: Unhold kubeadm
+      ansible.builtin.dpkg_selections:
+        name: kubeadm
+        selection: install
+    - name: Install desired version of kubeadm
+      apt: 
+        name: "kubeadm={{ install_kubeadm_version }}"
+    - name: Hold kubeadm
+      ansible.builtin.dpkg_selections:
+        name: kubeadm
+        selection: hold
+    - name: Upgrade kubeadm
+      command: kubeadm upgrade node
     - name: Drain master node
       command: "kubectl drain {{ inventory_hostname }} --ignore-daemonsets --delete-emptydir-data"
     - name: Unhold kubelet
@@ -55,5 +185,7 @@
         state: restarted 
     - name: Uncordon master node
       command: "kubectl uncordon {{ inventory_hostname }}"
-
-
+    - name: Delete .kube directory
+      file:
+        path: /root/.kube/
+        state: absent

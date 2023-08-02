@@ -1,2 +1,4 @@
 hosts.yml
 ansible.log
+config
+vars.yml

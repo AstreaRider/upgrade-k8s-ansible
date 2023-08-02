@@ -1,0 +1,4 @@
+install_kubeadm_version: 1.26.x-00
+upgrade_kubeadm_version: v1.26.x
+install_kubelet_version: 1.26.x-00
+install_kubectl_version: 1.26.x-00
